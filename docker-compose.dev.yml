@@ -1,0 +1,22 @@
+services:
+  chat-dev:
+    image: maven:3.9-eclipse-temurin-17
+    working_dir: /workspace
+    # 先预热依赖，再启动；并且跳过 test 编译
+    command: sh -lc "mvn -U -Dmaven.test.skip=true dependency:go-offline || true; mvn -Dmaven.test.skip=true spring-boot:run"
+    volumes:
+      - ./:/workspace
+      - m2cache:/root/.m2         # 这里引用 named volume
+    environment:
+      APP_REDIS_URL: redis://redis:6379
+      APP_SOCKET_HOST: 0.0.0.0
+      APP_SOCKET_PORT: 9092
+      SERVER_PORT: 8080
+    ports:
+      - "8081:8080"
+      - "9092:9092"
+    depends_on: [redis]
+
+# 👇 顶层定义 named volume（跟 services 平级）
+volumes:
+  m2cache: {}

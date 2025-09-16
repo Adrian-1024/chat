@@ -1,0 +1,108 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Chat Demo</title>
+</head>
+<body>
+<h3>Chat Demo</h3>
+
+<div>
+    <input id="name" placeholder="your name (eg: alice)" />
+    <button id="connect">Connect</button>
+</div>
+
+<div style="margin-top:8px">
+    <input id="to"   placeholder="to user (单聊)" />
+    <input id="msg"  placeholder="message" style="width:40%" />
+    <button id="send">Send</button>
+</div>
+<div style="margin-top:8px">
+    <input id="room" placeholder="room id (群聊)" />
+    <button id="joinRoom">Join</button>
+    <button id="leaveRoom">Leave</button>
+</div>
+
+<pre id="log" style="height:240px;border:1px solid #ccc;overflow:auto;margin-top:8px"></pre>
+
+<!-- 必须先引入 socket.io 客户端（和 netty-socketio 兼容的 2.x） -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.4.0/socket.io.js"></script>
+<script>
+    function detectPrefix() {
+      const seg = location.pathname.split('/')[1];
+      if (seg === 'c1' || seg === 'c2') return '/' + seg;
+      const qs = new URLSearchParams(location.search).get('node');
+      if (qs === 'c1' || qs === 'c2') return '/' + qs;
+      return '';
+    }
+    const PREFIX = detectPrefix();                   // '', '/c1', '/c2'
+    const SOCKET_PATH = `${PREFIX}/socket.io`;      // 如果你走 /api/socket.io，就改成 `${PREFIX}/api/socket.io`
+
+    let sock = null;
+    const log = (s) => {
+      const el = document.getElementById('log');
+      el.textContent += s + '\n';
+      el.scrollTop = el.scrollHeight;
+    };
+
+    document.getElementById('connect').onclick = () => {
+      const token = document.getElementById('name').value.trim();
+      if (!token) return alert('input your name first');
+
+      sock = io(window.location.origin, {
+        path: SOCKET_PATH,
+        transports: ['polling', 'websocket'],      // 先轮询后升级，更贴合 netty-socketio
+        reconnection: true,
+        reconnectionAttempts: Infinity,
+        reconnectionDelay: 1000,
+        timeout: 20000,
+        query: { token }
+      });
+
+      sock.on('connect', () => {
+        log('connected');
+        const room = document.getElementById('room').value.trim();
+        if (room) sock.emit('room:join', { room, msg: '加入房间' }, (ack) => log('ack ' + JSON.stringify(ack)));
+      });
+
+      sock.on('sys:welcome',  (p) => log('welcome ' + JSON.stringify(p)));
+      sock.on('chat:new',     (m) => log('chat ' + JSON.stringify(m)));
+      sock.on('connect_error', (e) => log('connect_error: ' + (e && (e.message || e))));
+      sock.on('reconnect_attempt', (n) => log('reconnect_attempt ' + n));
+      sock.on('reconnect',         (n) => log('reconnect ' + n));
+      sock.on('disconnect',        (r) => log('disconnect ' + r));
+    };
+
+    document.getElementById('send').onclick = () => {
+      if (!sock) return alert('connect first');
+      const to   = document.getElementById('to').value.trim();
+      const room = document.getElementById('room').value.trim();
+      const msg  = document.getElementById('msg').value;
+      if (!to && !room) return alert('填 to 或 room 其一');
+
+      const payload = { msg };
+      if (to) payload.to = to; else payload.room = room;
+      sock.emit('chat:send', payload, (ack) => log('ack ' + JSON.stringify(ack)));
+    };
+
+    document.getElementById('joinRoom').onclick = () => {
+      if (!sock) return alert('connect first');
+      const room = document.getElementById('room').value.trim();
+      if (!room) return alert('room need write');
+      sock.emit('room:join', { room, msg: '加入房间' }, (ack) => log('ack ' + JSON.stringify(ack)));
+    };
+
+    document.getElementById('leaveRoom').onclick = () => {
+      if (!sock) return alert('connect first');
+      const room = document.getElementById('room').value.trim();
+      if (!room) return alert('room need write');
+      sock.emit('room:leave', { room, msg: '离开房间' }, (ack) => log('ack ' + JSON.stringify(ack)));
+    };
+
+    window.addEventListener('beforeunload', () => {
+      try { sock && sock.disconnect(); } catch {}
+    });
+</script>
+
+</body>
+</html>

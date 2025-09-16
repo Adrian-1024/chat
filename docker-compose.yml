@@ -1,0 +1,28 @@
+version: "3.9"
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
+  chat1: &chat
+    build: .
+    environment:
+      APP_REDIS_URL: redis://redis:6379
+      APP_SOCKET_HOST: 0.0.0.0
+      APP_SOCKET_PORT: 9092
+      SERVER_PORT: 8080
+    depends_on: [redis]
+
+  chat2:
+    <<: *chat
+  chat3:
+    <<: *chat
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "8080:80"      # 对外入口（页面与 http 接口）
+      - "9090:9090"    # 可选：单独暴露一个 WS 入口，方便压测
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on: [chat1, chat2, chat3]
