@@ -33,3 +33,4 @@ build/
 ### VS Code ###
 .vscode/
 /C/
+/.mvn/
